@@ -1,0 +1,32 @@
+[package]
+name = "avif-decode"
+version = "0.2.0"
+authors = ["Kornel <kornel@geekhood.net>"]
+categories = ["multimedia::images"]
+description = "Convert AVIF images to PNG or decompressed pixel data"
+edition = "2018"
+homepage = "https://lib.rs/avif-decode"
+keywords = ["av1", "libaom", "decoder", "heif"]
+license = "BSD-3-Clause"
+readme = "README.md"
+repository = "https://github.com/kornelski/avif-decode"
+
+[[bin]]
+name = "avif_decode"
+path = "src/main.rs"
+required-features = ["binary"]
+
+[dependencies]
+aom-decode = "0.1.1"
+rgb = "0.8.25"
+yuv = "0.1.0"
+num_cpus = "1.13.0"
+avif-parse = "0.13.0"
+quick-error = "2.0.0"
+imgref = "1.7.1"
+owning_ref = "0.4.1"
+lodepng = { version = "3.2.2", optional = false }
+
+[features]
+default = ["binary"]
+binary = []
