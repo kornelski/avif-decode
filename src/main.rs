@@ -56,7 +56,7 @@ fn parse_args() -> Result<(PathBuf, PathBuf), &'static str> {
         return Err(if output_path.extension().unwrap_or("".as_ref()) != "png" {
             "output file must be .png. Multiple AVIF input files are not supported."
         } else {
-            "output file already exists"
+            "output file already exists. Use -f to overwrite."
         });
     }
     Ok((input_path, output_path))
