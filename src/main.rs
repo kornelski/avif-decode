@@ -36,7 +36,7 @@ fn parse_args() -> Result<(PathBuf, PathBuf), &'static str> {
             },
             a if a == "-o" => {
                 if output_path.is_some() {
-                    Err("Output specified more than once")?;
+                    return Err("Output specified more than once");
                 }
                 output_path = Some(args.next().ok_or("-o needs a value")?);
             },
@@ -46,7 +46,7 @@ fn parse_args() -> Result<(PathBuf, PathBuf), &'static str> {
             path if output_path.is_none() => {
                 output_path = Some(path);
             },
-            _ => Err("Too many arguments. Only input and output path expected")?,
+            _ => return Err("Too many arguments. Only input and output path expected"),
         }
     }
     let input_path = PathBuf::from(input_path.ok_or("Missing input path")?);
