@@ -1,6 +1,6 @@
 [package]
 name = "avif-decode"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Kornel <kornel@geekhood.net>"]
 categories = ["multimedia::images"]
 description = "Convert AVIF images to PNG or decompressed pixel data"
