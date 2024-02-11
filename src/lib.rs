@@ -1,6 +1,6 @@
 use rgb::ComponentMap;
 use rgb::RGBA16;
-use aom_decode::chroma::*;
+use aom_decode::chroma::{yuv_420, yuv_422, yuv_444};
 use aom_decode::color;
 use aom_decode::Config;
 use aom_decode::FrameTempRef;
@@ -103,11 +103,11 @@ impl Decoder {
                     Image::Rgba8(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Rgb8(img), AlphaImage::Gray16(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.map(|c| ((c as u16) << 8) | c as u16).alpha(*a)).collect();
+                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.map(|c| (u16::from(c) << 8) | u16::from(c)).alpha(*a)).collect();
                     Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Rgb16(img), AlphaImage::Gray8(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.alpha((*a as u16) << 8 | (*a as u16))).collect();
+                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.alpha(u16::from(*a) << 8 | u16::from(*a))).collect();
                     Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Rgb16(img), AlphaImage::Gray16(alpha)) => {
@@ -124,20 +124,20 @@ impl Decoder {
                 },
                 (Image::Gray8(img), AlphaImage::Gray16(alpha)) => {
                     let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| {
-                        let c = (*c as u16) << 8 | (*c as u16);
+                        let c = u16::from(*c) << 8 | u16::from(*c);
                         RGBA16::new(c,c,c,*a)
                     }).collect();
                     Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Gray16(img), AlphaImage::Gray8(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| RGBA16::new(*c,*c,*c,(*a as u16) << 8 | (*a as u16))).collect();
+                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| RGBA16::new(*c,*c,*c,u16::from(*a) << 8 | u16::from(*a))).collect();
                     Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Gray16(img), AlphaImage::Gray16(alpha)) => {
                     let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| RGBA16::new(*c,*c,*c,*a)).collect();
                     Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
                 },
-                (Image::Rgba8(_), _) | (Image::Rgba16(_), _) => unreachable!(),
+                (Image::Rgba8(_) | Image::Rgba16(_), _) => unreachable!(),
             };
             if self.premultiplied_alpha {
                 match &mut image {
@@ -145,7 +145,7 @@ impl Decoder {
                         img.pixels_mut().filter(|px| px.a > 0).for_each(|px| {
                             #[inline(always)]
                             fn unprem(val: u8, alpha: u8) -> u8 {
-                                ((val as u16 * 256) / (alpha as u16 * 256) / 256).min(255) as u8
+                                ((u16::from(val) * 256) / (u16::from(alpha) * 256) / 256).min(255) as u8
                             }
                             px.r = unprem(px.r, px.a);
                             px.g = unprem(px.g, px.a);
@@ -156,7 +156,7 @@ impl Decoder {
                         img.pixels_mut().filter(|px| px.a > 0).for_each(|px| {
                             #[inline(always)]
                             fn unprem(val: u16, alpha: u16) -> u16 {
-                                ((val as u32 * 0xFFFF) / (alpha as u32 * 0xFFFF) / 0xFFFF).min(65535) as u16
+                                ((u32::from(val) * 0xFFFF) / (u32::from(alpha) * 0xFFFF) / 0xFFFF).min(65535) as u16
                             }
                             px.r = unprem(px.r, px.a);
                             px.g = unprem(px.g, px.a);
