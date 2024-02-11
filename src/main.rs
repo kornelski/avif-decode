@@ -1,13 +1,13 @@
 use rgb::ComponentMap;
 use std::path::Path;
 use std::path::PathBuf;
-use avif_decode::*;
+use avif_decode::{Decoder, Image, Result};
 
 fn main() {
     let (input_path, output_path) = match parse_args() {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("{}\nusage: avif_decode input.avif output.png", e);
+            eprintln!("{e}\nusage: avif_decode input.avif output.png");
             std::process::exit(1);
         }
     };

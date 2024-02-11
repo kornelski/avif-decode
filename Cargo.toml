@@ -1,6 +1,6 @@
 [package]
 name = "avif-decode"
-version = "0.2.2"
+version = "1.0.0"
 authors = ["Kornel <kornel@geekhood.net>"]
 categories = ["multimedia::images"]
 description = "Convert AVIF images to PNG or decompressed pixel data"
@@ -10,6 +10,7 @@ license = "BSD-3-Clause"
 readme = "README.md"
 repository = "https://github.com/kornelski/avif-decode"
 edition = "2021"
+rust-version = "1.75.0"
 
 [[bin]]
 name = "avif_decode"
@@ -17,19 +18,22 @@ path = "src/main.rs"
 required-features = ["binary"]
 
 [dependencies]
-aom-decode = "0.2.1"
-rgb = "0.8.31"
-yuv = "0.1.4"
-num_cpus = "1.13.1"
+aom-decode = "0.2.7"
+rgb = "0.8.37"
+yuv = "0.1.5"
 avif-parse = "1.0.0"
 quick-error = "2.0.1"
-imgref = "1.9.1"
+imgref = "1.10.1"
 owning_ref = "0.4.1"
-lodepng = { version = "3.5.2", optional = false }
+lodepng = { version = "3.10.1", optional = true }
 
 [features]
 default = ["binary"]
-binary = []
+binary = ["dep:lodepng"]
+# Use faster zlib (in C) when compressing PNG
+cfzlib = ["lodepng?/cfzlib"]
+# Use faster zlib (in C) when compressing PNG
+ngzlib = ["lodepng?/ngzlib"]
 
 [profile.dev]
 opt-level = 1
@@ -40,7 +44,9 @@ opt-level = 3
 lto = true
 
 [badges]
-maintenance = { status = "as-is" }
+maintenance = { status = "passively-maintained" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--generate-link-to-definition"]
+

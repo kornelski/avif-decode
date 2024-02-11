@@ -75,7 +75,7 @@ impl Decoder {
 
     fn from_parsed(avif: avif_parse::AvifData) -> Result<Self> {
         let mut decoder = Box::new(aom_decode::Decoder::new(&Config {
-            threads: num_cpus::get(),
+            threads: std::thread::available_parallelism().map(|a| a.get()).unwrap_or(4).min(32),
         })?);
 
         let alpha = avif.alpha_item.as_ref().map(|a| Self::to_alpha(decoder.decode_frame(a)?)).transpose()?;

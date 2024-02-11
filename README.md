@@ -14,7 +14,7 @@ It always processes one file at a time. If output path is omitted, it'll be the 
 
 ### Install from source
 
-Requires [Rust 1.49 or later](https://rustup.rs) and a C compiler.
+Requires [Rust 1.75 or later](https://rustup.rs) and a C compiler.
 
 ```bash
 cargo install avif-decode
@@ -33,7 +33,7 @@ cargo install avif-decode
 ### Unsupported features
 
  * Any form of HDR. Maybe later.
- * YCgCo color space. That's work in progress.
+ * YCgCo color space.
  * Embedded ICC color profiles. AV1 already supports *so many* color spaces, it'd be rude to support an extra color conversion layer that's complex and unecessary.
  * The kitchen sink of pointless HEIF features. I'm writing an image decoder, not Photoshop.
 
