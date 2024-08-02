@@ -1,6 +1,6 @@
 [package]
 name = "avif-decode"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Kornel <kornel@geekhood.net>"]
 categories = ["multimedia::images"]
 description = "Convert AVIF images to PNG or decompressed pixel data"
@@ -10,7 +10,7 @@ license = "BSD-3-Clause"
 readme = "README.md"
 repository = "https://github.com/kornelski/avif-decode"
 edition = "2021"
-rust-version = "1.75.0"
+rust-version = "1.76"
 
 [[bin]]
 name = "avif_decode"
@@ -18,14 +18,14 @@ path = "src/main.rs"
 required-features = ["binary"]
 
 [dependencies]
-aom-decode = "0.2.7"
-rgb = "0.8.37"
-yuv = "0.1.5"
+aom-decode = "0.2.10"
+rgb = "0.8.45"
+yuv = "0.1.7"
 avif-parse = "1.0.0"
 quick-error = "2.0.1"
 imgref = "1.10.1"
 owning_ref = "0.4.1"
-lodepng = { version = "3.10.1", optional = true }
+lodepng = { version = "3.10.3", optional = true }
 
 [features]
 default = ["binary"]
@@ -37,7 +37,7 @@ ngzlib = ["lodepng?/ngzlib"]
 
 [profile.dev]
 opt-level = 1
-debug = 1
+debug = "line-tables-only"
 
 [profile.release]
 opt-level = 3
@@ -49,4 +49,3 @@ maintenance = { status = "passively-maintained" }
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 rustdoc-args = ["--generate-link-to-definition"]
-

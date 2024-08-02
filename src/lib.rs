@@ -99,23 +99,23 @@ impl Decoder {
         Ok(if let Some(alpha) = self.alpha {
             let mut image = match (color, alpha) {
                 (Image::Rgb8(img), AlphaImage::Gray8(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.alpha(*a)).collect();
+                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.with_alpha(*a)).collect();
                     Image::Rgba8(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Rgb8(img), AlphaImage::Gray16(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.map(|c| (u16::from(c) << 8) | u16::from(c)).alpha(*a)).collect();
+                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.map(|c| (u16::from(c) << 8) | u16::from(c)).with_alpha(*a)).collect();
                     Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Rgb16(img), AlphaImage::Gray8(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.alpha(u16::from(*a) << 8 | u16::from(*a))).collect();
+                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.with_alpha(u16::from(*a) << 8 | u16::from(*a))).collect();
                     Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Rgb16(img), AlphaImage::Gray16(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.alpha(*a)).collect();
+                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.with_alpha(*a)).collect();
                     Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Rgba8(img), AlphaImage::Gray8(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.alpha(*a)).collect();
+                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.with_alpha(*a)).collect();
                     Image::Rgba8(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Gray8(img), AlphaImage::Gray8(alpha)) => {

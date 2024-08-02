@@ -74,9 +74,9 @@ fn run(input_path: &Path, output_path: &Path) -> Result<(), Box<dyn std::error::
         },
         Image::Rgb16(img) => {
             let (mut buf, width, height) = img.into_contiguous_buf();
-            buf.iter_mut().for_each(|px| {
+            for px in &mut buf {
                 *px = px.map(|c| u16::from_ne_bytes(c.to_be_bytes()));
-            });
+            }
             lodepng::encode_memory(&buf, width, height, lodepng::ColorType::RGB, 16)
         },
         Image::Rgba8(img) => {
@@ -85,9 +85,9 @@ fn run(input_path: &Path, output_path: &Path) -> Result<(), Box<dyn std::error::
         },
         Image::Rgba16(img) => {
             let (mut buf, width, height) = img.into_contiguous_buf();
-            buf.iter_mut().for_each(|px| {
+            for px in &mut buf {
                 *px = px.map(|c| u16::from_ne_bytes(c.to_be_bytes()));
-            });
+            }
             lodepng::encode_memory(&buf, width, height, lodepng::ColorType::RGBA, 16)
         },
         Image::Gray8(img) => {
@@ -96,9 +96,9 @@ fn run(input_path: &Path, output_path: &Path) -> Result<(), Box<dyn std::error::
         },
         Image::Gray16(img) => {
             let (mut buf, width, height) = img.into_contiguous_buf();
-            buf.iter_mut().for_each(|px| {
+            for px in &mut buf {
                 *px = px.map(|c| u16::from_ne_bytes(c.to_be_bytes()));
-            });
+            }
             lodepng::encode_memory(&buf, width, height, lodepng::ColorType::GREY, 16)
         },
     }?;
