@@ -1,16 +1,11 @@
-use rgb::ComponentMap;
-use rgb::RGBA16;
 use aom_decode::chroma::{yuv_420, yuv_422, yuv_444};
 use aom_decode::color;
 use aom_decode::Config;
 use aom_decode::FrameTempRef;
 use aom_decode::RowsIters;
 use imgref::ImgVec;
-use rgb::alt::GRAY16;
-use rgb::alt::GRAY8;
-use rgb::RGB16;
-use rgb::RGB8;
-use rgb::RGBA8;
+use rgb::prelude::*;
+use rgb::*;
 use std::io;
 use yuv::YUV;
 
@@ -41,17 +36,17 @@ quick_error! {
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub enum Image {
-    Rgb8(ImgVec<RGB8>),
-    Rgb16(ImgVec<RGB16>),
-    Rgba8(ImgVec<RGBA8>),
-    Rgba16(ImgVec<RGBA16>),
-    Gray8(ImgVec<GRAY8>),
-    Gray16(ImgVec<GRAY16>),
+    Rgb8(ImgVec<Rgb<u8>>),
+    Rgb16(ImgVec<Rgb<u16>>),
+    Rgba8(ImgVec<Rgba<u8>>),
+    Rgba16(ImgVec<Rgba<u16>>),
+    Gray8(ImgVec<Gray<u8>>),
+    Gray16(ImgVec<Gray<u16>>),
 }
 
 enum AlphaImage {
-    Gray8(ImgVec<GRAY8>),
-    Gray16(ImgVec<GRAY16>),
+    Gray8(ImgVec<Gray<u8>>),
+    Gray16(ImgVec<Gray<u16>>),
 }
 
 pub struct Decoder {
@@ -75,7 +70,7 @@ impl Decoder {
 
     fn from_parsed(avif: avif_parse::AvifData) -> Result<Self> {
         let mut decoder = Box::new(aom_decode::Decoder::new(&Config {
-            threads: std::thread::available_parallelism().map(|a| a.get()).unwrap_or(4).min(32),
+            threads: std::thread::available_parallelism().map_or(4, |a| a.get()).min(32),
         })?);
 
         let alpha = avif.alpha_item.as_ref().map(|a| Self::to_alpha(decoder.decode_frame(a)?)).transpose()?;
@@ -119,22 +114,22 @@ impl Decoder {
                     Image::Rgba8(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Gray8(img), AlphaImage::Gray8(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| RGBA8::new(*c,*c,*c,*a)).collect();
+                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| Rgba::new(*c,*c,*c,*a)).collect();
                     Image::Rgba8(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Gray8(img), AlphaImage::Gray16(alpha)) => {
                     let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| {
                         let c = u16::from(*c) << 8 | u16::from(*c);
-                        RGBA16::new(c,c,c,*a)
+                        Rgba::new(c,c,c,*a)
                     }).collect();
                     Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Gray16(img), AlphaImage::Gray8(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| RGBA16::new(*c,*c,*c,u16::from(*a) << 8 | u16::from(*a))).collect();
+                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| Rgba::new(*c,*c,*c,u16::from(*a) << 8 | u16::from(*a))).collect();
                     Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Gray16(img), AlphaImage::Gray16(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| RGBA16::new(*c,*c,*c,*a)).collect();
+                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| Rgba::new(*c,*c,*c,*a)).collect();
                     Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
                 },
                 (Image::Rgba8(_) | Image::Rgba16(_), _) => unreachable!(),
@@ -258,7 +253,7 @@ impl Decoder {
                 let mut out = Vec::with_capacity(width * height);
                 out.extend(y.flat_map(|row| {
                     row.iter().copied().map(|y| {
-                        GRAY8::new(conv.to_rgb(YUV{y,u:128,v:128}).g)
+                        Gray::new(conv.to_rgb(YUV{y,u:128,v:128}).g)
                     })
                 }));
                 AlphaImage::Gray8(ImgVec::new(out, width, height))
@@ -271,7 +266,7 @@ impl Decoder {
                 out.extend(y.flat_map(|row| {
                     row.iter().copied().map(|y| {
                         let y = u16::from_ne_bytes(y);
-                        GRAY16::new(conv.to_rgb(YUV{y,u:128*256+128,v:128*256+128}).g)
+                        Gray::new(conv.to_rgb(YUV{y,u:128*256+128,v:128*256+128}).g)
                     })
                 }));
                 AlphaImage::Gray16(ImgVec::new(out, width, height))

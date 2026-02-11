@@ -50,13 +50,13 @@ fn parse_args() -> Result<(PathBuf, PathBuf), &'static str> {
         }
     }
     let input_path = PathBuf::from(input_path.ok_or("Missing input path")?);
-    let output_path = args.next().map(PathBuf::from).unwrap_or_else(|| input_path.with_extension("png"));
+    let output_path = args.next().map_or_else(|| input_path.with_extension("png"), PathBuf::from);
 
     if !force && output_path.exists() {
-        return Err(if output_path.extension().unwrap_or("".as_ref()) != "png" {
-            "output file must be .png. Multiple AVIF input files are not supported."
-        } else {
+        return Err(if output_path.extension().unwrap_or("".as_ref()) == "png" {
             "output file already exists. Use -f to overwrite."
+        } else {
+            "output file must be .png. Multiple AVIF input files are not supported."
         });
     }
     Ok((input_path, output_path))
