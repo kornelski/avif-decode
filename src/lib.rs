@@ -1,13 +1,8 @@
-use aom_decode::chroma::{yuv_420, yuv_422, yuv_444};
-use aom_decode::color;
+use aom_decode::avif::Avif;
 use aom_decode::Config;
-use aom_decode::FrameTempRef;
-use aom_decode::RowsIters;
 use imgref::ImgVec;
-use rgb::prelude::*;
 use rgb::*;
 use std::io;
-use yuv::YUV;
 
 use quick_error::quick_error;
 
@@ -18,15 +13,7 @@ quick_error! {
             display("{}", err)
             from()
         }
-        Parse(err: avif_parse::Error) {
-            display("{}", err)
-            from()
-        }
         Decode(err: aom_decode::Error) {
-            display("{}", err)
-            from()
-        }
-        Meta(err: yuv::Error) {
             display("{}", err)
             from()
         }
@@ -44,16 +31,9 @@ pub enum Image {
     Gray16(ImgVec<Gray<u16>>),
 }
 
-enum AlphaImage {
-    Gray8(ImgVec<Gray<u8>>),
-    Gray16(ImgVec<Gray<u16>>),
-}
 
 pub struct Decoder {
-    _decoder: Box<aom_decode::Decoder>,
-    color: FrameTempRef<'static>,
-    alpha: Option<AlphaImage>,
-    premultiplied_alpha: bool,
+    avif: Avif,
 }
 
 impl Decoder {
@@ -64,212 +44,28 @@ impl Decoder {
 
     #[inline]
     pub fn from_reader<R: io::Read>(reader: &mut R) -> Result<Self> {
-        let avif = avif_parse::read_avif(reader)?;
-        Self::from_parsed(avif)
-    }
-
-    fn from_parsed(avif: avif_parse::AvifData) -> Result<Self> {
-        let mut decoder = Box::new(aom_decode::Decoder::new(&Config {
-            threads: std::thread::available_parallelism().map_or(4, |a| a.get()).min(32),
-        })?);
-
-        let alpha = avif.alpha_item.as_ref().map(|a| Self::to_alpha(decoder.decode_frame(a)?)).transpose()?;
-        let premultiplied_alpha = avif.premultiplied_alpha;
-        let color = decoder.decode_frame(&avif.primary_item)?;
-        // This lifetime only exist to prevent further calls on the Decoder.
-        // This is guaranteed here by decoding the alpha first.
-        let color = unsafe {
-            std::mem::transmute::<FrameTempRef<'_>, FrameTempRef<'static>>(color)
-        };
+        let mut data = Vec::new();
+        reader.read_to_end(&mut data)?;
         Ok(Self {
-            _decoder: decoder,
-            color,
-            alpha,
-            premultiplied_alpha,
+            avif: Avif::decode(&data, &Config {
+                threads: std::thread::available_parallelism().map_or(4, |a| a.get()).min(32),
+            })?,
         })
     }
 
-    pub fn to_image(self) -> Result<Image> {
-        let color = Self::color_convert(self.color)?;
-        Ok(if let Some(alpha) = self.alpha {
-            let mut image = match (color, alpha) {
-                (Image::Rgb8(img), AlphaImage::Gray8(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.with_alpha(*a)).collect();
-                    Image::Rgba8(ImgVec::new(buf, img.width(), img.height()))
-                },
-                (Image::Rgb8(img), AlphaImage::Gray16(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.map(|c| (u16::from(c) << 8) | u16::from(c)).with_alpha(*a)).collect();
-                    Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
-                },
-                (Image::Rgb16(img), AlphaImage::Gray8(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.with_alpha(u16::from(*a) << 8 | u16::from(*a))).collect();
-                    Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
-                },
-                (Image::Rgb16(img), AlphaImage::Gray16(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.with_alpha(*a)).collect();
-                    Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
-                },
-                (Image::Rgba8(img), AlphaImage::Gray8(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| c.with_alpha(*a)).collect();
-                    Image::Rgba8(ImgVec::new(buf, img.width(), img.height()))
-                },
-                (Image::Gray8(img), AlphaImage::Gray8(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| Rgba::new(*c,*c,*c,*a)).collect();
-                    Image::Rgba8(ImgVec::new(buf, img.width(), img.height()))
-                },
-                (Image::Gray8(img), AlphaImage::Gray16(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| {
-                        let c = u16::from(*c) << 8 | u16::from(*c);
-                        Rgba::new(c,c,c,*a)
-                    }).collect();
-                    Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
-                },
-                (Image::Gray16(img), AlphaImage::Gray8(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| Rgba::new(*c,*c,*c,u16::from(*a) << 8 | u16::from(*a))).collect();
-                    Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
-                },
-                (Image::Gray16(img), AlphaImage::Gray16(alpha)) => {
-                    let buf = img.pixels().zip(alpha.pixels()).map(|(c, a)| Rgba::new(*c,*c,*c,*a)).collect();
-                    Image::Rgba16(ImgVec::new(buf, img.width(), img.height()))
-                },
-                (Image::Rgba8(_) | Image::Rgba16(_), _) => unreachable!(),
-            };
-            if self.premultiplied_alpha {
-                match &mut image {
-                    Image::Rgba8(img) => {
-                        img.pixels_mut().filter(|px| px.a > 0).for_each(|px| {
-                            #[inline(always)]
-                            fn unprem(val: u8, alpha: u8) -> u8 {
-                                ((u16::from(val) * 256) / (u16::from(alpha) * 256) / 256).min(255) as u8
-                            }
-                            px.r = unprem(px.r, px.a);
-                            px.g = unprem(px.g, px.a);
-                            px.b = unprem(px.b, px.a);
-                        });
-                    },
-                    Image::Rgba16(img) => {
-                        img.pixels_mut().filter(|px| px.a > 0).for_each(|px| {
-                            #[inline(always)]
-                            fn unprem(val: u16, alpha: u16) -> u16 {
-                                ((u32::from(val) * 0xFFFF) / (u32::from(alpha) * 0xFFFF) / 0xFFFF).min(65535) as u16
-                            }
-                            px.r = unprem(px.r, px.a);
-                            px.g = unprem(px.g, px.a);
-                            px.b = unprem(px.b, px.a);
-                        });
-                    },
-                    _ => {},
-                }
-            }
-            image
-        } else {
-            color
-        })
-    }
-
-    fn color_convert(img: FrameTempRef<'_>) -> Result<Image> {
-        let range = img.range();
-        Ok(match img.rows_iter()? {
-            RowsIters::YuvPlanes8 {y,u,v,chroma_sampling} => {
-                let mc = img.matrix_coefficients().unwrap_or(color::MatrixCoefficients::BT709);
-                let conv = yuv::convert::RGBConvert::<u8>::new(range, mc)?;
-                let width = y.width();
-                let height = y.height();
-                let mut out = Vec::with_capacity(width * height);
-                let mut tmp1;
-                let mut tmp2;
-                let mut tmp3;
-                let px_iter: &mut dyn Iterator<Item=YUV<u8>> = match chroma_sampling {
-                    color::ChromaSampling::Cs444 => {
-                        tmp1 = yuv_444(y, u, v);
-                        &mut tmp1
-                    },
-                    color::ChromaSampling::Cs420 => {
-                        tmp2 = yuv_420(y, u, v);
-                        &mut tmp2
-                    },
-                    color::ChromaSampling::Cs422 => {
-                        tmp3 = yuv_422(y, u, v);
-                        &mut tmp3
-                    },
-                    color::ChromaSampling::Monochrome => return Err(Error::Meta(yuv::Error::InvalidDepthRequested)),
-                };
-                out.extend(px_iter.map(|px| conv.to_rgb(px)));
-                Image::Rgb8(ImgVec::new(out, width, height))
+    pub fn to_image(mut self) -> Result<Image> {
+        Ok(match self.avif.convert()? {
+            aom_decode::avif::Image::RGB8(img) => Image::Rgb8(img),
+            aom_decode::avif::Image::RGBA8(img) => Image::Rgba8(img),
+            aom_decode::avif::Image::RGB16(img) => Image::Rgb16(img),
+            aom_decode::avif::Image::RGBA16(img) => Image::Rgba16(img),
+            aom_decode::avif::Image::Gray8(img) => {
+                let (buf, width, height) = img.into_contiguous_buf();
+                Image::Gray8(ImgVec::new(buf.into_iter().map(Gray::new).collect(), width, height))
             },
-            RowsIters::YuvPlanes16 {y,u,v,chroma_sampling, depth} => {
-                let mc = img.matrix_coefficients().unwrap_or(color::MatrixCoefficients::BT709);
-                let conv = yuv::convert::RGBConvert::<u16>::new(range, mc, depth)?;
-                let width = y.width();
-                let height = y.height();
-                let mut out = Vec::with_capacity(width * height);
-                let mut tmp1;
-                let mut tmp2;
-                let mut tmp3;
-                let px_iter: &mut dyn Iterator<Item=YUV<[u8; 2]>> = match chroma_sampling {
-                    color::ChromaSampling::Cs444 => {
-                        tmp1 = yuv_444(y, u, v);
-                        &mut tmp1
-                    },
-                    color::ChromaSampling::Cs420 => {
-                        tmp2 = yuv_420(y, u, v);
-                        &mut tmp2
-                    },
-                    color::ChromaSampling::Cs422 => {
-                        tmp3 = yuv_422(y, u, v);
-                        &mut tmp3
-                    },
-                    color::ChromaSampling::Monochrome => unreachable!(),
-                };
-                out.extend(px_iter.map(|px| conv.to_rgb(YUV{
-                    y: u16::from_ne_bytes(px.y),
-                    u: u16::from_ne_bytes(px.u),
-                    v: u16::from_ne_bytes(px.v),
-                })));
-                Image::Rgb16(ImgVec::new(out, width, height))
-            },
-            gray_iters => {
-                let mc = img.matrix_coefficients().unwrap_or(color::MatrixCoefficients::Identity);
-                match Self::to_gray(range, mc, gray_iters)? {
-                    AlphaImage::Gray8(img) => Image::Gray8(img),
-                    AlphaImage::Gray16(img) => Image::Gray16(img),
-                }
-            },
-        })
-    }
-
-    fn to_alpha(img: FrameTempRef<'_>) -> Result<AlphaImage> {
-        let range = img.range();
-        let mc = img.matrix_coefficients().unwrap_or(color::MatrixCoefficients::Identity);
-        Ok(Self::to_gray(range, mc, img.rows_iter()?)?)
-    }
-
-    fn to_gray(range: aom_decode::color::Range, mc: color::MatrixCoefficients, iters: RowsIters) -> Result<AlphaImage, yuv::Error> {
-        Ok(match iters {
-            RowsIters::YuvPlanes8 {y,..} | RowsIters::Mono8(y) => {
-                let conv = yuv::convert::RGBConvert::<u8>::new(range, mc)?;
-                let width = y.width();
-                let height = y.height();
-                let mut out = Vec::with_capacity(width * height);
-                out.extend(y.flat_map(|row| {
-                    row.iter().copied().map(|y| {
-                        Gray::new(conv.to_rgb(YUV{y,u:128,v:128}).g)
-                    })
-                }));
-                AlphaImage::Gray8(ImgVec::new(out, width, height))
-            },
-            RowsIters::YuvPlanes16 {y, depth, ..} | RowsIters::Mono16(y, depth) => {
-                let conv = yuv::convert::RGBConvert::<u16>::new(range, mc, depth)?;
-                let width = y.width();
-                let height = y.height();
-                let mut out = Vec::with_capacity(width * height);
-                out.extend(y.flat_map(|row| {
-                    row.iter().copied().map(|y| {
-                        let y = u16::from_ne_bytes(y);
-                        Gray::new(conv.to_rgb(YUV{y,u:128*256+128,v:128*256+128}).g)
-                    })
-                }));
-                AlphaImage::Gray16(ImgVec::new(out, width, height))
+            aom_decode::avif::Image::Gray16(img) => {
+                let (buf, width, height) = img.into_contiguous_buf();
+                Image::Gray16(ImgVec::new(buf.into_iter().map(Gray::new).collect(), width, height))
             },
         })
     }

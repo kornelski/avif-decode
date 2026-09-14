@@ -1,39 +1,31 @@
 [package]
 name = "avif-decode"
-version = "1.0.2"
+version = "2.0.0"
 authors = ["Kornel <kornel@geekhood.net>"]
 categories = ["multimedia::images"]
 description = "Convert AVIF images to PNG or decompressed pixel data"
 homepage = "https://lib.rs/avif-decode"
 keywords = ["av1", "libaom", "decoder", "heif"]
 license = "BSD-3-Clause"
-readme = "README.md"
 repository = "https://github.com/kornelski/avif-decode"
 edition = "2024"
-rust-version = "1.91"
+rust-version = "1.98"
 
 [[bin]]
-name = "avif_decode"
+name = "avif-decode"
 path = "src/main.rs"
 required-features = ["binary"]
 
 [dependencies]
-aom-decode = "0.2.13"
-avif-parse = "2.0.0"
-imgref = "1.12.0"
-lodepng = { version = "3.12.1", optional = true }
-owning_ref = "0.4.1"
+aom-decode = "1.0.0"
+imgref = "1.12.3"
+lodepng = { version = "3.12.2", optional = true }
 quick-error = "2.0.1"
-rgb = "0.8.52"
-yuv = "0.1.7"
+rgb = "0.8.53"
 
 [features]
 default = ["binary"]
 binary = ["dep:lodepng"]
-# Use faster zlib (in C) when compressing PNG
-cfzlib = ["lodepng?/zlibrs"]
-# Use faster zlib (in C) when compressing PNG
-ngzlib = ["lodepng?/ngzlib"]
 
 [profile.dev]
 opt-level = 1

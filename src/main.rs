@@ -50,7 +50,7 @@ fn parse_args() -> Result<(PathBuf, PathBuf), &'static str> {
         }
     }
     let input_path = PathBuf::from(input_path.ok_or("Missing input path")?);
-    let output_path = args.next().map_or_else(|| input_path.with_extension("png"), PathBuf::from);
+    let output_path = output_path.map_or_else(|| input_path.with_extension("png"), PathBuf::from);
 
     if !force && output_path.exists() {
         return Err(if output_path.extension().unwrap_or("".as_ref()) == "png" {
