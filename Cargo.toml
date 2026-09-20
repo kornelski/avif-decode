@@ -1,11 +1,11 @@
 [package]
 name = "avif-decode"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Kornel <kornel@geekhood.net>"]
 categories = ["multimedia::images"]
 description = "Convert AVIF images to PNG or decompressed pixel data"
 homepage = "https://lib.rs/avif-decode"
-keywords = ["av1", "libaom", "decoder", "heif"]
+keywords = ["av1", "rav1d", "decoder", "heif"]
 license = "BSD-3-Clause"
 repository = "https://github.com/kornelski/avif-decode"
 edition = "2024"
@@ -17,11 +17,22 @@ path = "src/main.rs"
 required-features = ["binary"]
 
 [dependencies]
-aom-decode = "1.0.0"
+avif-parse = "2.1.0"
+bytemuck = "1.25"
 imgref = "1.12.3"
 lodepng = { version = "3.12.2", optional = true }
+log = "0.4.34"
 quick-error = "2.0.1"
-rgb = "0.8.53"
+rgb = { version = "0.8.53", default-features = false, features = ["bytemuck"] }
+yuv = "0.8.19"
+
+[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
+rav1d = "1.1.0"
+
+# rav1d failed to bundle required aarch64 asm headers
+# https://github.com/memorysafety/rav1d/issues/1449
+[target.'cfg(not(any(target_arch = "x86", target_arch = "x86_64")))'.dependencies]
+rav1d = { version = "1.1.0", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
 
 [features]
 default = ["binary"]
@@ -30,6 +41,14 @@ binary = ["dep:lodepng"]
 [profile.dev]
 opt-level = 1
 debug = "line-tables-only"
+
+[profile.dev.package.rav1d]
+opt-level = 2
+debug-assertions = false
+
+[profile.dev.package.yuv]
+opt-level = 2
+debug-assertions = false
 
 [profile.release]
 opt-level = 3

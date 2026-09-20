@@ -1,8 +1,8 @@
-# AVIF to PNG converter
+# Pure Rust AVIF decoder and AVIF to PNG converter
 
-Converts AVIF images (AV1 + HEIF) to standard PNG images. It's meant to decode very accurately (using AOM, precise colorspace conversions). It is not meant to produce small PNG files. Some PNG files will be 100 times larger than the AVIF input.
+It can be used as a Rust library for decoding AVIF images (AV1 + HEIF) straight to uncompressed pixels (RGBA, etc). Decoding is done by [rav1d](https://lib.rs/crates/rav1d), a Rust port of dav1d, so there's no C library to build.
 
-It can also be used as a Rust library for decoding straight to uncompressed pixels (RGBA, etc).
+Optionally can be built as a CLI that converts AVIF  to standard PNG images. Expect the PNG to bemany times larger than the AVIF input.
 
 ## Usage
 
@@ -14,7 +14,7 @@ It always processes one file at a time. If output path is omitted, it'll be the 
 
 ### Install from source
 
-Requires [Rust 1.98 or later](https://rustup.rs) and a C compiler.
+Requires [Rust 1.98 or later](https://rustup.rs).
 
 ```bash
 cargo install avif-decode
@@ -26,6 +26,7 @@ cargo install avif-decode
 
  * 8-, 10-, and 12-bit deep images. Images are saved as 16-bit PNG when necessary.
  * RGB and many flavors of YUV color spaces in both full and "studio" range.
+ * AV1 film grain synthesis
  * Alpha channel, in both premultiplied and uncorrelated alpha modes.
  * 4:4:4, 4:2:2, 4:2:0 chroma modes. Chroma subsampling uses box upsampling.
    BTW: The AVIF spec intentionally left chroma upsampling algorithm unspecified, so images using 4:2:0 or 4:2:2 modes will have decoder-dependent distortions. It's best to never use chroma subsampling modes in AVIF.
@@ -34,8 +35,8 @@ cargo install avif-decode
 
  * Any form of HDR. Maybe later.
  * Embedded ICC color profiles. AV1 already supports *so many* color spaces, it'd be rude to support an extra color conversion layer that's complex and unecessary.
- * The kitchen sink of pointless HEIF features. I'm writing an image decoder, not Photoshop.
+ * The kitchen sink of pointless HEIF features. I'm writing an image decoder, not Photoshop. Lossless cropping (`clap`) is a dangerous footgun for a Web format. Operating point selection (`a1op`) is simplified to using the final layer.
 
- ## License
+## License
 
 New BSD

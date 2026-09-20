@@ -63,7 +63,6 @@ fn parse_args() -> Result<(PathBuf, PathBuf), &'static str> {
 }
 
 fn run(input_path: &Path, output_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-
     let data = std::fs::read(input_path).map_err(|e| format!("Unable to read '{}', because: {}", input_path.display(), e))?;
 
     let d = Decoder::from_avif(&data)?;

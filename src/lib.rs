@@ -1,22 +1,52 @@
-use aom_decode::avif::Avif;
-use aom_decode::Config;
+//! Decoding AVIF images (AV1 + HEIF) straight to uncompressed pixels (RGBA, etc).
+//! Decoding is done by [rav1d](https://lib.rs/crates/rav1d), a Rust port of dav1d, so there's no C library to build.
+//!
+//! (an older version of this library supports libaom instead)
+use crate::image::{Planes, write_alpha8, write_alpha16};
+use crate::rav1d::Rav1dDecoder;
+use crate::color::MatrixCoefficients;
 use imgref::ImgVec;
 use rgb::*;
+use std::collections::TryReserveError;
 use std::io;
 
 use quick_error::quick_error;
 
+mod color;
+mod rav1d;
+mod image;
+
 quick_error! {
     #[derive(Debug)]
+    #[non_exhaustive]
     pub enum Error {
         Io(err: io::Error) {
             display("{}", err)
             from()
         }
-        Decode(err: aom_decode::Error) {
+        Rav1d(errno: u32) {
+            display("rav1d error ({})", errno)
+        }
+        Avif(err: avif_parse::Error) {
             display("{}", err)
             from()
         }
+        Yuv(err: yuv::YuvError) {
+            display("{}", err)
+            from()
+        }
+        Unsupported(msg: &'static str) {
+            display("{}", msg)
+        }
+        InternalError(msg: &'static str) {
+            display("{}", msg)
+        }
+    }
+}
+
+impl From<TryReserveError> for Error {
+    fn from(_: TryReserveError) -> Self {
+        Self::Io(io::ErrorKind::OutOfMemory.into())
     }
 }
 
@@ -32,41 +62,65 @@ pub enum Image {
 }
 
 
+/// AVIF decoder + converter
 pub struct Decoder {
-    avif: Avif,
+    decoder: Rav1dDecoder,
+    avif: avif_parse::AvifData,
 }
 
 impl Decoder {
     #[inline(always)]
-    pub fn from_avif(mut data: &[u8]) -> Result<Self> {
-        Self::from_reader(&mut data)
+    pub fn from_avif(mut avif_file_data: &[u8]) -> Result<Self> {
+        Self::from_reader(&mut avif_file_data)
     }
 
     #[inline]
-    pub fn from_reader<R: io::Read>(reader: &mut R) -> Result<Self> {
-        let mut data = Vec::new();
-        reader.read_to_end(&mut data)?;
+    pub fn from_reader<R: io::Read + ?Sized>(avif_file_data_reader: &mut R) -> Result<Self> {
+        let avif = avif_parse::read_avif(avif_file_data_reader)?;
+        let threads = std::thread::available_parallelism().map_or(4, |n| n.get()).min(32);
         Ok(Self {
-            avif: Avif::decode(&data, &Config {
-                threads: std::thread::available_parallelism().map_or(4, |a| a.get()).min(32),
-            })?,
+            avif,
+            decoder: Rav1dDecoder::new(threads)?,
         })
     }
 
+    #[inline(never)]
     pub fn to_image(mut self) -> Result<Image> {
-        Ok(match self.avif.convert()? {
-            aom_decode::avif::Image::RGB8(img) => Image::Rgb8(img),
-            aom_decode::avif::Image::RGBA8(img) => Image::Rgba8(img),
-            aom_decode::avif::Image::RGB16(img) => Image::Rgb16(img),
-            aom_decode::avif::Image::RGBA16(img) => Image::Rgba16(img),
-            aom_decode::avif::Image::Gray8(img) => {
-                let (buf, width, height) = img.into_contiguous_buf();
-                Image::Gray8(ImgVec::new(buf.into_iter().map(Gray::new).collect(), width, height))
+        // The decoder recycles buffers, so can't have both color and alpha without copying,
+        // therefore conversion will put placeholders and then update alpha
+        let has_alpha = self.avif.alpha_item.is_some();
+        let color = self.decoder.decode_frame(&std::mem::take(&mut self.avif.primary_item))?;
+        let mut img = match color.planes()? {
+            Planes::YuvPlanes8 { y, u, v, chroma_sampling } => {
+                color.yuv_to_rgb8(y, u, v, chroma_sampling, has_alpha)?
             },
-            aom_decode::avif::Image::Gray16(img) => {
-                let (buf, width, height) = img.into_contiguous_buf();
-                Image::Gray16(ImgVec::new(buf.into_iter().map(Gray::new).collect(), width, height))
+            Planes::Mono8(y) => color.yuv_to_gray8(y, has_alpha)?,
+            Planes::Mono16(y, depth) => color.yuv_to_gray16(y, depth, has_alpha)?,
+            Planes::YuvPlanes16 { y, u, v, chroma_sampling, depth } => {
+                color.yuv_to_rgb16(y, u, v, depth, chroma_sampling, has_alpha)?
             },
-        })
+        };
+        let color_mc = color.matrix_coefficients().unwrap_or(MatrixCoefficients::Identity);
+
+        if let Some(alpha_av1) = self.avif.alpha_item.take() {
+            let alpha = self.decoder.decode_frame(&alpha_av1)?;
+            drop(alpha_av1);
+            let range = alpha.range();
+            if let Some(alpha_mc) = alpha.matrix_coefficients().filter(|&mc| mc != MatrixCoefficients::Identity)
+                && color_mc != alpha_mc {
+                return Err(Error::Unsupported("alpha image has color info"));
+            }
+            match alpha.planes()? {
+                Planes::YuvPlanes8 { y, .. } | Planes::Mono8(y) => {
+                    write_alpha8(&mut img, y, range, self.avif.premultiplied_alpha)?;
+                },
+                Planes::YuvPlanes16 { y, depth, .. } | Planes::Mono16(y, depth) => {
+                    write_alpha16(&mut img, y, depth, range, self.avif.premultiplied_alpha)?;
+                },
+            }
+        } else if has_alpha {
+            return Err(Error::InternalError("alpha item missing"));
+        }
+        Ok(img)
     }
 }
